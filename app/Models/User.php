@@ -1,59 +1,47 @@
 <?php
 
 namespace App\Models;
+
 use App\Core\App;
 
 class User
 {
-    function search($query)
+    private $db;
+    private $table = 'users';
+
+    public function __construct()
     {
-        $stm = App::db()->prepare("SELECT * FROM users WHERE email LIKE :q");
-        $stm->execute(['q' => "%$query%"]);
-        return $stm->fetchAll();
+        $this->db = App::db();
     }
 
-    function all()
+    public function findByEmail(string $email)
     {
-        $stm = App::db()->prepare("SELECT * FROM users");
-
-        $stm->execute();
-
-        return $stm->fetchAll();
+        $stmt = $this->db->prepare("SELECT * FROM " . $this->table . " WHERE email = :email");
+        $stmt->bindParam(':email', $email);
+        $stmt->execute();
+        return $stmt->fetch();
     }
 
-    function find($id)
+    public function create(array $data)
     {
-        $stm = App::db()->prepare("SELECT * FROM users WHERE id=:id");
-        $stm->execute(['id' => $id]);
-        return $stm->fetch();
+        $query = "INSERT INTO " . $this->table . " (name, email, password, role) VALUES (:name, :email, :password, :role)";
+        $stmt = $this->db->prepare($query);
+
+        $stmt->bindParam(':name', $data['name']);
+        $stmt->bindParam(':email', $data['email']);
+        $stmt->bindParam(':password', password_hash($data['password'], PASSWORD_DEFAULT));
+        $stmt->bindParam(':role', $data['role']);
+
+        return $stmt->execute();
     }
 
-    function create($email, $password)
+    public function findById(int $id)
     {
-        $stm = App::db()->prepare("INSERT INTO users(email, password) VALUES (:email, :password)");
-        $stm->execute(['email' => $email, 'password' => $password]);
-    }
-    function findByEmail($email)
-    {
-        $stm = App::db()->prepare("SELECT * FROM users WHERE email=:email");
-        $stm->execute(['email' => $email]);
-        return $stm->fetch();
-    }
-
-    function update($id, $email, $password = null)
-    {
-        if ($password) {
-            $stm = App::db()->prepare("UPDATE users SET email=:email, password=:password WHERE id = :id");
-            $stm->execute(['id' => $id, 'email' => $email, 'password' => $password]);
-        } else {
-            $stm = App::db()->prepare("UPDATE users SET email=:email WHERE id = :id");
-            $stm->execute(['id' => $id, 'email' => $email]);
-        }
-    }
-
-    function delete($id)
-    {
-        $stm = App::db()->prepare("DELETE FROM users WHERE id=:id");
-        $stm->execute(['id' => $id]);
+        $stmt = $this->db->prepare("SELECT * FROM " . $this->table . " WHERE id = :id");
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        return $stmt->fetch();
     }
 }
+
+

@@ -12,6 +12,8 @@ final class App
     {
         // Load .env
         self::$config = self::loadEnv();
+        // Initialize JWTHandler with secret key and expiration time
+        \App\Helpers\JWTHandler::init();
         // Start session
         if (session_status() === PHP_SESSION_NONE) {
             session_start();
@@ -48,8 +50,13 @@ final class App
             $lines = file($envPath, FILE_IGNORE_NEW_LINES |
                 FILE_SKIP_EMPTY_LINES);
             foreach ($lines as $line) {
-                [$key, $value] = explode("=", $line, 2);
+                $line =trim($line);
+                //Skip comments and invalid lines
+                if ($line === ''|| str_starts_with($line, '#') || strpos($line, '=') === false) { 
+                continue; 
+                }
 
+                [$key, $value] = explode("=", $line, 2);
                 $vars[trim($key)] = trim($value);
 
             }
