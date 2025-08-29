@@ -2,78 +2,72 @@
 
 namespace App\Controllers;
 
-use App\Core\DotEnv;
 use App\Models\User;
+use App\Helpers\JWTHandler;
+use App\Helpers\Response;
 
-class AuthController 
+class AuthController
 {
-    public function showLogin()
+    private $userModel;
+
+    public function __construct()
     {
-        return $this->view('login');
-    }
-    public function login()
-    {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $email = $_POST['email'] ?? '';
-            $password = $_POST['password'] ?? '';
-            $userModel = new User();
-            $user = $userModel->findByEmail($email);
-            if ($user && password_verify($password, $user['password'])) {
-                $_SESSION['user_id'] = $user['id'];
-                header('Location:' . DotEnv::env('APP_URL') . '/users');
-                exit;
-            } else {
-                $_SESSION['error'] = 'Invalid credentials.';
-                header('Location:' . DotEnv::env('APP_URL') . '/users');
-                exit;
-            }
-        }
-        return $this->view('login');
-    }
-    public function showRegister()
-    {
-        return $this->view('register');
+        $this->userModel = new User();
     }
 
     public function register()
     {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $email = $_POST['email'] ?? '';
-            $password = $_POST['password'] ?? '';
-            $confirm_password = $_POST['confirm_password'] ?? '';
-            $userModel = new User();
-            if ($userModel->findByEmail($email)) {
-                $_SESSION['error'] = 'Email already exists.';
-                header('Location:' . DotEnv::env('APP_URL') . '/users');
-                exit;
-            }
-            if ($password !== $confirm_password) {
-                $_SESSION['error'] = 'Passwords do not match.';
-                header('Location:' . DotEnv::env('APP_URL') . '/auth/register');
-                exit;
-            }
-            if (strlen($password) < 6) {
-                $_SESSION['error'] = 'Password must be at least 6 characters.';
-                header('Location:' . DotEnv::env('APP_URL') . '/auth/register');
-                exit;
-            }
-            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-            $userModel->create($email, $hashedPassword);
-            $_SESSION['success'] = 'Registration successful. Please login.';
-            header('Location:' . DotEnv::env('APP_URL') . '/users');
-            exit;
+        $data = json_decode(file_get_contents("php://input"), true);
+
+        if (!isset($data["name"]) || !isset($data["email"]) || !isset($data["password"])) {
+            Response::error("Please provide name, email, and password.", 400);
         }
-        return $this->view('register');
+
+        $data["role"] = isset($data["role"]) && in_array($data["role"], ["admin", "hr", "manager", "employee"]) ? $data["role"] : "employee";
+
+        if ($this->userModel->findByEmail($data["email"])) {
+            Response::error("User with this email already exists.", 409);
+        }
+
+        if ($this->userModel->create($data)) {
+            Response::success("User registered successfully.", [], 201);
+        } else {
+            Response::error("Failed to register user.", 500);
+        }
     }
-    public function logout()
+
+    public function login()
     {
-        // var_dump($_SESSION);
-        session_destroy();
-        header('Location' . DotEnv::env('APP_URL') . '/auth/login');
-        exit;
-    }
-    private function view($view)
-    {
-        include __DIR__ . '/../Views/auth/' . $view . '.php';
+        $data = json_decode(file_get_contents("php://input"), true);
+
+        if (!isset($data["email"]) || !isset($data["password"])) {
+            Response::error("Please provide email and password.", 400);
+        }
+
+        $user = $this->userModel->findByEmail($data["email"]);
+
+        if (!$user || !password_verify($data["password"], $user["password"])) {
+            Response::error("Invalid credentials.", 401);
+        }
+
+        $tokenData = [
+            "id" => $user["id"],
+            "name" => $user["name"],
+            "email" => $user["email"],
+            "role" => $user["role"]
+        ];
+        $token = JWTHandler::generateToken($tokenData);
+
+        Response::success("Login successful.", [
+            "token" => $token,
+            "user" => [
+                "id" => $user["id"],
+                "name" => $user["name"],
+                "email" => $user["email"],
+                "role" => $user["role"]
+            ]
+        ]);
     }
 }
+
+
